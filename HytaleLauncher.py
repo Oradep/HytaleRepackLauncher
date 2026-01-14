@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
+import random
 
 # Цветовая палитра Hytale
 COLORS = {
@@ -162,7 +163,7 @@ class HytaleLauncher:
 
         self.main_container = ft.Container(
             bgcolor=COLORS["panel_bg"],
-            blur=ft.Blur(15, 15),
+            blur=ft.Blur(1, 1),
             border=ft.Border.all(1, COLORS["border"]),
             border_radius=30,
             padding=40,
@@ -176,7 +177,7 @@ class HytaleLauncher:
         self.main_container.content = ft.Column(
             [
                 ft.Row([
-                    ft.Text("HYTALE", size=42, weight="bold", color=COLORS["accent"]),
+                    ft.Text("HYTALE", size=52, weight="bold", color=COLORS["accent"]),
                     ft.IconButton(ft.Icons.SETTINGS_ROUNDED, icon_color="white", on_click=self.build_settings_screen)
                 ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 
@@ -262,14 +263,24 @@ class HytaleLauncher:
         if not self.bg_images: return ""
         return f"backgrounds/{self.bg_images[self.current_img_index]}"
 
+
     async def animate_backgrounds(self):
         while True:
             await asyncio.sleep(8)
             if len(self.bg_images) > 1:
+                # 2. Убираем прозрачность (начало анимации)
                 self.bg_image.opacity = 0
                 self.page.update()
                 await asyncio.sleep(1)
-                self.current_img_index = (self.current_img_index + 1) % len(self.bg_images)
+
+                # 3. Выбираем новый индекс, который не равен текущему
+                new_index = self.current_img_index
+                while new_index == self.current_img_index:
+                    new_index = random.randint(0, len(self.bg_images) - 1)
+                
+                self.current_img_index = new_index
+                
+                # 4. Меняем картинку и возвращаем видимость
                 self.bg_image.src = self.get_img_url()
                 self.bg_image.opacity = 1
                 self.page.update()
