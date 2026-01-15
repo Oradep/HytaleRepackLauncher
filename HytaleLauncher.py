@@ -34,7 +34,7 @@ class HytaleLauncher:
         self.page.window.max_height = 600
         
         # Центрирование окна
-        self.page.window.center()
+        self.page.run_task(self.page.window.center)
         
         self.page.padding = 0
         self.page.spacing = 0
@@ -115,7 +115,6 @@ class HytaleLauncher:
     def save_settings(self, e=None):
         try:
             self.settings["nickname"] = self.nickname_input.value
-            self.settings["version"] = self.version_dropdown.value
             self.settings["java_path"] = self.java_path_input.value
             self.settings["ram_gb"] = int(self.ram_slider.value)
             self.settings["uuid"] = self.uuid_input.value
@@ -135,17 +134,12 @@ class HytaleLauncher:
 
 
     def init_ui_elements(self):
-        # Поля ввода с фиксированной шириной для симметрии
+        # Поля ввода
         self.nickname_input = ft.TextField(
             label="Никнейм", value=self.settings["nickname"],
             width=300, border_color=COLORS["accent"], focused_border_color="white"
         )
         
-        self.version_dropdown = ft.Dropdown(
-            width=300, label="Версия", value=self.settings["version"],
-            options=[ft.dropdown.Option("Latest Release"), ft.dropdown.Option("Development Build")],
-        )
-
         self.java_path_input = ft.TextField(
             label="Путь к java.exe", value=self.settings["java_path"],
             width=300, text_size=12, border_color="#444444"
@@ -161,6 +155,35 @@ class HytaleLauncher:
             value=self.settings["ram_gb"], active_color=COLORS["accent"]
         )
 
+        # Прогресс-бар (изначально скрыт)
+        self.launch_progress = ft.ProgressBar(
+            width=300, color=COLORS["accent"], bgcolor="#333333", 
+            visible=False, border_radius=5
+        )
+
+        # Кнопка запуска с проверкой существования файла
+        game_path = self.base_dir / "package" / "game" / "latest"
+        client_exe = game_path / "Client" / "HytaleClient.exe"
+        file_exists = client_exe.exists()
+
+        self.play_button = ft.FilledButton(
+            content=ft.Text("ИГРАТЬ", size=20, weight="bold"),
+            width=300, height=55,
+            disabled=not file_exists,
+            style=ft.ButtonStyle(
+                bgcolor={ft.ControlState.DEFAULT: COLORS["accent"], ft.ControlState.DISABLED: "#444444"},
+                shape=ft.RoundedRectangleBorder(radius=12),
+                color=ft.Colors.WHITE
+            ),
+            on_click=self.launch_game
+        )
+
+        self.status_text = ft.Text(
+            "Ready to play" if file_exists else "Client not found!", 
+            color=COLORS["text_secondary"] if file_exists else ft.Colors.RED_400, 
+            size=12
+        )
+
         self.main_container = ft.Container(
             bgcolor=COLORS["panel_bg"],
             blur=ft.Blur(1, 1),
@@ -168,7 +191,7 @@ class HytaleLauncher:
             border_radius=30,
             padding=40,
             width=450,
-            height=540,
+            height=350,
             alignment=ft.alignment.Alignment(0,0),
             animate=ft.Animation(300, ft.AnimationCurve.DECELERATE)
         )
@@ -183,21 +206,12 @@ class HytaleLauncher:
                 
                 ft.Column([
                     self.nickname_input,
-                    self.version_dropdown,
                 ], spacing=15, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                 
                 ft.Column([
-                    ft.FilledButton(
-                        content=ft.Text("ИГРАТЬ", size=20, weight="bold"),
-                        width=300, height=55,
-                        style=ft.ButtonStyle(
-                            bgcolor=COLORS["accent"], 
-                            shape=ft.RoundedRectangleBorder(radius=12),
-                            color=ft.Colors.WHITE
-                        ),
-                        on_click=self.launch_game
-                    ),
-                    ft.Text("Ready to play", color=COLORS["text_secondary"], size=12)
+                    self.play_button,
+                    self.launch_progress, # Добавили в UI
+                    self.status_text
                 ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=10)
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -286,6 +300,13 @@ class HytaleLauncher:
                 self.page.update()
 
     async def launch_game(self, e):
+        # Визуальный отклик
+        self.play_button.disabled = True
+        self.launch_progress.visible = True
+        self.status_text.value = "Запуск игры..."
+        self.status_text.color = COLORS["accent"]
+        self.page.update()
+
         self.save_settings()
         
         game_path = self.base_dir / "package" / "game" / "latest"
@@ -305,12 +326,19 @@ class HytaleLauncher:
             "--name", self.settings["nickname"]
         ]
         
+        # Небольшая задержка для визуализации прогресс-бара
+        await asyncio.sleep(1.5)
+        
         try:
             subprocess.Popen(args, cwd=str(self.base_dir))
             await self.page.window.destroy() 
         except Exception as ex:
             logging.error(f"Критическая ошибка при запуске игры: {ex}")
-            # Можно добавить визуальное уведомление об ошибке здесь
+            self.status_text.value = "Ошибка запуска!"
+            self.status_text.color = ft.Colors.RED_ACCENT
+            self.launch_progress.visible = False
+            self.play_button.disabled = False
+            self.page.update()
 
 def main(page: ft.Page):
     HytaleLauncher(page)
